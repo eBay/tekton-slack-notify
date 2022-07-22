@@ -1,0 +1,52 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: slack-notify
+spec:
+  description: >-
+    This task sends a message to slack channel.
+  params:
+  - name: channel
+    type: string
+    description: slack channel id
+  - name: text
+    type: string
+    description: slack message text
+  - name: slack_secret
+    type: string
+    description: name of slack token secret
+  - name: thread_ts
+    type: string
+    description: thread ts, when specified, the message will be sent to thread.
+    default: ""
+  - name: slack_secret_key
+    type: string
+    description: key in slack token secret
+    default: token
+  volumes:
+  - name: slack
+    secret:
+      secretName: $(params.slack_secret)
+  results:
+  - name: ts
+    description: slack message ts
+  steps:
+  - image: ghcr.io/ebay/tekton-slack-notify:0.1
+    name: slack-notify
+    volumeMounts:
+    - name: slack
+      mountPath: /etc/slac-notify
+      readOnly: true
+    command:
+    - /ko-app/tekton-slack-notify
+    args:
+    - --channel
+    - $(params.channel)
+    - --text
+    - $(params.text)
+    - --thread-ts
+    - $(params.thread_ts)
+    - --ts-file
+    - $(results.ts.path)
+    - --token-file
+    - /etc/slack-notify/$(params.slack_secret_key)

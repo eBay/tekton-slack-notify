@@ -35,7 +35,7 @@ spec:
     name: slack-notify
     volumeMounts:
     - name: slack
-      mountPath: /etc/slac-notify
+      mountPath: /etc/slack-notify
       readOnly: true
     command:
     - /ko-app/tekton-slack-notify

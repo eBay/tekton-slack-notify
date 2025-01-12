@@ -16,7 +16,7 @@ $ go get github.com/ebay/tekton-slack-notify
 Or install it as a Tekton task:
 
 ```console
-$ kubectl apply -f https://raw.githubusercontent.com/ebay/tekton-slack-notify/task.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/eBay/tekton-slack-notify/refs/heads/main/task.yaml
 ```
 
 ## Usage

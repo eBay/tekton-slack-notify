@@ -23,6 +23,10 @@ spec:
     type: string
     description: key in slack token secret
     default: token
+  - name: reaction
+    type: string
+    description: emoji name to send as a reaction to the parent message
+    default: ""
   volumes:
   - name: slack
     secret:
@@ -50,3 +54,5 @@ spec:
     - $(results.ts.path)
     - --token-file
     - /etc/slack-notify/$(params.slack_secret_key)
+    - --reaction
+    - $(params.reaction)

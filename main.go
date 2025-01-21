@@ -17,9 +17,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -33,6 +35,8 @@ var (
 	threadTS string
 	text     string
 	tsFile   string
+	reaction string
+	debug    bool
 )
 
 func init() {
@@ -41,6 +45,8 @@ func init() {
 	pflag.StringVar(&threadTS, "thread-ts", "", "thread ts, when specified, the message will be sent to thread")
 	pflag.StringVar(&text, "text", "", "message text")
 	pflag.StringVar(&tsFile, "ts-file", "", "if specified, the message ts will be written into this file")
+	pflag.StringVar(&reaction, "reaction", "", "emoji reaction to add to the message")
+	pflag.BoolVar(&debug, "debug", false, "pass to debug responses")
 }
 
 // For details about API, please take a look at https://api.slack.com/methods/chat.postMessage
@@ -58,61 +64,115 @@ type response struct {
 	TS      string `json:"ts"`
 }
 
-func main() {
-	pflag.Parse()
-
-	token, err := ioutil.ReadFile(tokenFile)
+func sendSlackRequest(token, url string, payload []byte, debug bool) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(payload))
 	if err != nil {
-		log.Fatalf("failed to read %s: %s", tokenFile, err)
-	}
-
-	payload, err := json.Marshal(&message{
-		Channel:   channel,
-		Text:      text,
-		ThreadTS:  threadTS,
-		LinkNames: true,
-	})
-	if err != nil {
-		log.Fatalf("failed to marshal message: %s", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, "https://slack.com/api/chat.postMessage", bytes.NewBuffer(payload))
-	if err != nil {
-		log.Fatalf("failed to new slack chat.postMessage request: %s", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("failed to do slack chat.postMessage request: %s", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: %s", string(bodyBytes))
+	}
+
+	if debug {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(bodyBytes))
+	}
+
+	return resp, nil
+}
+
+func publishMessage(token string, msg *message, tsFile string, debug bool) error {
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	resp, err := sendSlackRequest(token, "https://slack.com/api/chat.postMessage", payload, debug)
+	if err != nil {
+		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Fatalf("failed to send slack message, unexpected status code: %d", resp.StatusCode)
-	} else {
-		log.Printf("message successfully sent")
-	}
+	log.Printf("message successfully sent")
 
 	if tsFile == "" {
-		return
+		return nil
 	}
 
-	// extract the ts info from response
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("failed to read response body: %s", err)
+		return fmt.Errorf("failed to read response body: %w", err)
 	}
 	response := &response{}
 	err = json.Unmarshal(data, &response)
 	if err != nil {
-		log.Fatalf("failed to unmarshal response: %s", err)
+		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	err = ioutil.WriteFile(tsFile, []byte(response.TS), 0644)
+	err = os.WriteFile(tsFile, []byte(response.TS), 0644)
 	if err != nil {
-		log.Fatalf("failed to write (%s) into %s: %s", response.TS, tsFile, err)
+		return fmt.Errorf("failed to write (%s) into %s: %w", response.TS, tsFile, err)
+	}
+
+	return nil
+}
+
+func addReaction(token, channel, threadTS, reaction string, debug bool) error {
+	payload := map[string]string{
+		"channel":   channel,
+		"timestamp": threadTS,
+		"name":      reaction,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal reaction payload: %w", err)
+	}
+
+	resp, err := sendSlackRequest(token, "https://slack.com/api/reactions.add", payloadBytes, debug)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func main() {
+	pflag.Parse()
+
+	token, err := os.ReadFile(tokenFile)
+	if err != nil {
+		log.Fatalf("failed to read %s: %s", tokenFile, err)
+	}
+
+	msg := &message{
+		Channel:   channel,
+		Text:      text,
+		ThreadTS:  threadTS,
+		LinkNames: true,
+	}
+
+	if text != "" {
+		err = publishMessage(strings.TrimSpace(string(token)), msg, tsFile, debug)
+		if err != nil {
+			log.Fatalf("failed to publish message: %s", err)
+		}
+	}
+
+	if reaction != "" && threadTS != ""{
+		err = addReaction(strings.TrimSpace(string(token)), channel, threadTS, reaction, debug)
+		if err != nil {
+			log.Fatalf("failed to add reaction: %s", err)
+		}
 	}
 }

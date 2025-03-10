@@ -142,6 +142,9 @@ func addReaction(token, channel, threadTS, reaction string, debug bool) error {
 	if err != nil {
 		return err
 	}
+
+	log.Printf("reaction (%s) successfully sent to thread (%s) in channel (%s)", reaction, threadTS, channel)
+
 	defer resp.Body.Close()
 
 	return nil
@@ -169,10 +172,12 @@ func main() {
 		}
 	}
 
-	if reaction != "" && threadTS != ""{
+	if reaction != "" && threadTS != "" {
 		err = addReaction(strings.TrimSpace(string(token)), channel, threadTS, reaction, debug)
 		if err != nil {
 			log.Fatalf("failed to add reaction: %s", err)
 		}
+	} else {
+		log.Printf("no reaction (%s) or threadTS (%s) provided, skipping reaction", reaction, threadTS)
 	}
 }

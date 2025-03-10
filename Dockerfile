@@ -19,4 +19,8 @@ COPY --from=builder /app/slack-notifier /app/
 # Add CA certificates for HTTPS requests
 RUN apk --no-cache add ca-certificates
 
+# Create a directory for token files
+RUN mkdir -p /app/tokens
+
+# Set default entrypoint with better error handling
 ENTRYPOINT ["/app/slack-notifier"]

@@ -13,14 +13,14 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o slack-notifier
 
 FROM alpine:3.19
-WORKDIR /app
-COPY --from=builder /app/slack-notifier /app/
+WORKDIR /ko-app
+COPY --from=builder /app/slack-notifier /ko-app/tekton-slack-notify
 
 # Add CA certificates for HTTPS requests
 RUN apk --no-cache add ca-certificates
 
 # Create a directory for token files
-RUN mkdir -p /app/tokens
+RUN mkdir -p /ko-app/tokens
 
 # Set default entrypoint with better error handling
-ENTRYPOINT ["/app/slack-notifier"]
+ENTRYPOINT ["/ko-app/tekton-slack-notify"]
